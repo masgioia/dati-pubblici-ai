@@ -21,7 +21,7 @@ class RegionalChangesTests(unittest.TestCase):
     @patch("src.istat_population.requests.get")
     def test_download_uses_https_endpoint_and_end_period_workaround(self, mock_get):
         response = Mock()
-        response.text = "REF_AREA,TIME_PERIOD,OBS_VALUE\\nITC1,2014,100\\nITC1,2024,110\\n"
+        response.text = "REF_AREA,TIME_PERIOD,OBS_VALUE\nITC1,2014,100\nITC1,2024,110\n"
         response.raise_for_status.return_value = None
         mock_get.return_value = response
 
