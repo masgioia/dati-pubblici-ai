@@ -1,6 +1,7 @@
 import unittest
+from unittest.mock import Mock, patch
 import pandas as pd
-from src.istat_population import regional_changes
+from src.istat_population import API_URL, download_population, regional_changes
 
 
 class RegionalChangesTests(unittest.TestCase):
@@ -16,6 +17,21 @@ class RegionalChangesTests(unittest.TestCase):
         self.assertAlmostEqual(north["variazione_percentuale"], 10.0)
         south = result.set_index("codice_regione").loc["ITF3"]
         self.assertAlmostEqual(south["variazione_percentuale"], -10.0)
+
+    @patch("src.istat_population.requests.get")
+    def test_download_uses_https_endpoint_and_end_period_workaround(self, mock_get):
+        response = Mock()
+        response.text = "REF_AREA,TIME_PERIOD,OBS_VALUE\\nITC1,2014,100\\nITC1,2024,110\\n"
+        response.raise_for_status.return_value = None
+        mock_get.return_value = response
+
+        df = download_population(2014, 2024)
+
+        self.assertEqual(len(df), 2)
+        args, kwargs = mock_get.call_args
+        self.assertEqual(args[0], API_URL)
+        self.assertTrue(args[0].startswith("https://"))
+        self.assertEqual(kwargs["params"], {"startPeriod": 2014, "endPeriod": 2023})
 
     def test_rejects_duplicate_observations(self):
         df = pd.DataFrame({
