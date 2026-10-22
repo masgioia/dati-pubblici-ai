@@ -25,6 +25,7 @@ Per usare altri anni, cambia `--start-year` e `--end-year`. L'anno finale deve e
 - Dataset: ISTAT, **Popolazione residente al 1° gennaio**, dataflow `22_289`, struttura `DCIS_POPRES1`.
 - [Pagina ISTAT sui Web Services SDMX](https://www.istat.it/classificazioni-e-strumenti/web-services-sdmx/).
 - [Documentazione e note operative sull'endpoint](https://ondata.github.io/guida-api-istat/processing/note-endpoint-esploradati/).
-- Endpoint di download configurato nello script: `http://sdmx.istat.it/SDMXWS/rest/data/22_289/.TOTAL..9.99../`.
+- Endpoint di download configurato nello script: `https://esploradati.istat.it/SDMXWS/rest/data/IT1,22_289/A..JAN.9.TOTAL.99/`.
+- Workaround documentato per il filtro temporale: l'endpoint restituisce un anno in più rispetto a `endPeriod`; lo script richiede `endPeriod = anno finale - 1` e poi filtra localmente gli anni richiesti. La chiamata può richiedere alcuni minuti.
 
-Il servizio può cambiare schema o comportamento; lo script controlla le colonne minime e si interrompe con un messaggio esplicito se la risposta non è compatibile. Il prototipo salva anche la risposta grezza per rendere verificabili i dati di partenza. La pipeline non genera risposte narrative con AI: è il primo componente di acquisizione e calcolo riproducibile del progetto.
+La guida tecnica segnala che il servizio può essere lento e che il filtro `endPeriod` ha un bug noto; lo script applica il workaround documentato. Il servizio può comunque cambiare schema o comportamento; lo script controlla le colonne minime e si interrompe con un messaggio esplicito se la risposta non è compatibile. Il prototipo salva anche la risposta grezza per rendere verificabili i dati di partenza. La pipeline non genera risposte narrative con AI: è il primo componente di acquisizione e calcolo riproducibile del progetto.
