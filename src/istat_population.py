@@ -9,28 +9,45 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-# ISTAT's legacy SDMX endpoint is a documented fallback for temporal-filter
-# issues observed on the newer endpoint. See README for source documentation.
-API_URL = "http://sdmx.istat.it/SDMXWS/rest/data/22_289/.TOTAL..9.99../"
+# The legacy HTTP endpoint currently redirects repeatedly. Use the current
+# HTTPS endpoint. Its endPeriod filter has a documented off-by-one bug:
+# to include year N, request endPeriod=N-1 (ISTAT/onData guide, checked 2026-10).
+API_URL = "https://esploradati.istat.it/SDMXWS/rest/data/IT1,22_289/A..JAN.9.TOTAL.99/"
 SOURCE_URL = "https://esploradati.istat.it/SDMXWS/rest/data/IT1,22_289/A..JAN.9.TOTAL.99/"
+ACCEPT = "application/vnd.sdmx.data+csv;version=1.0.0"
 
 
-def download_population(start_year: int, end_year: int, timeout: int = 90) -> pd.DataFrame:
-    """Fetch the selected years as CSV and return raw observations."""
+def download_population(start_year: int, end_year: int, timeout: int = 240) -> pd.DataFrame:
+    """Fetch observations for the requested years and return the raw CSV table."""
     if start_year > end_year:
         raise ValueError("start_year must be <= end_year")
+    if start_year < 1900 or end_year > 2100:
+        raise ValueError("Years must be between 1900 and 2100")
+
+    # ISTAT's current /rest/data endpoint returns one extra year for endPeriod.
+    # Subtract one from the requested end year, then filter exact years locally.
+    params = {"startPeriod": start_year, "endPeriod": end_year - 1}
     response = requests.get(
         API_URL,
-        params={"startPeriod": start_year, "endPeriod": end_year},
-        headers={"Accept": "application/vnd.sdmx.data+csv;version=1.0.0"},
+        params=params,
+        headers={
+            "Accept": ACCEPT,
+            "User-Agent": "dati-pubblici-ai/0.1 (open-data portfolio project)",
+        },
         timeout=timeout,
     )
     response.raise_for_status()
     if not response.text.strip():
         raise RuntimeError("ISTAT returned an empty response")
-    df = pd.read_csv(io.StringIO(response.text), dtype=str)
+    try:
+        df = pd.read_csv(io.StringIO(response.text), dtype=str)
+    except pd.errors.ParserError as exc:
+        raise RuntimeError("ISTAT response could not be parsed as CSV") from exc
     if df.empty:
-        raise RuntimeError("ISTAT returned no observations for the selected period")
+        raise RuntimeError(
+            "ISTAT returned no observations. The service may be temporarily unavailable "
+            "or the requested years may not be published."
+        )
     df.columns = [c.strip().upper() for c in df.columns]
     if "OBS_VALUE" not in df.columns or "TIME_PERIOD" not in df.columns:
         raise RuntimeError("Unexpected ISTAT CSV schema. Columns received: " + ", ".join(df.columns))
@@ -39,7 +56,7 @@ def download_population(start_year: int, end_year: int, timeout: int = 90) -> pd
 
 def identify_area_column(df: pd.DataFrame) -> str:
     """Identify the territorial code column without assuming one API label."""
-    for name in ("ITTER107", "REF_AREA", "TERRITORIO", "GEO"):
+    for name in ("REF_AREA", "ITTER107", "TERRITORIO", "GEO"):
         if name in df.columns:
             return name
     possible = [c for c in df.columns if "TERR" in c or "AREA" in c or "ITTER" in c]
@@ -100,7 +117,7 @@ def main() -> int:
         print(changes.to_string(index=False, formatters={"variazione_percentuale": "{:.2f}%".format}))
         print(f"\nCSV grezzo: {args.raw_output}\nRisultati: {args.output}")
         return 0
-    except (requests.RequestException, ValueError, RuntimeError, pd.errors.ParserError) as exc:
+    except (requests.RequestException, ValueError, RuntimeError) as exc:
         print(f"Errore: {exc}", file=sys.stderr)
         return 1
 
